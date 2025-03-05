@@ -134,3 +134,60 @@ UserInputService.InputBegan:Connect(function(input)
         toggleAimbot()
     end
 end)
+
+---------------------------------------------------------
+-- Новый функционал: переключение хит-боксов по кнопке P --
+---------------------------------------------------------
+
+-- Переменная для статуса хит-боксов и хранения оригинальных размеров головы
+local hitboxesEnabled = false
+local originalHeadSizes = {}
+local lastHitboxTarget = nil
+
+-- Функция обновления хит-боксов: увеличивает голову цели в 6 раз
+local function updateHitboxes()
+    if hitboxesEnabled then
+        local currentCamera = workspace.CurrentCamera
+        local closestPlayer = getClosestVisiblePlayer(currentCamera)
+        if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+            local head = closestPlayer.Character.Head
+            -- Если таргет сменился, возвращаем размер предыдущей головы
+            if lastHitboxTarget and lastHitboxTarget ~= closestPlayer then
+                if lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
+                    lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
+                    originalHeadSizes[lastHitboxTarget] = nil
+                end
+            end
+            lastHitboxTarget = closestPlayer
+            if not originalHeadSizes[closestPlayer] then
+                originalHeadSizes[closestPlayer] = head.Size
+            end
+            head.Size = originalHeadSizes[closestPlayer] * 6
+        else
+            -- Если цели нет, возвращаем размер последней измененной головы
+            if lastHitboxTarget and lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
+                lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
+                originalHeadSizes[lastHitboxTarget] = nil
+            end
+            lastHitboxTarget = nil
+        end
+    else
+        -- При отключении хит-боксов возвращаем размер измененной головы
+        if lastHitboxTarget and lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
+            lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
+            originalHeadSizes[lastHitboxTarget] = nil
+        end
+        lastHitboxTarget = nil
+    end
+end
+
+-- Подключаем обновление хит-боксов к RenderStepped
+RunService.RenderStepped:Connect(updateHitboxes)
+
+-- Переключение хит-боксов по нажатию клавиши P
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        hitboxesEnabled = not hitboxesEnabled
+        print("Hitboxes toggled: " .. tostring(hitboxesEnabled))
+    end
+end)
