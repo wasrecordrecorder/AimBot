@@ -1,35 +1,56 @@
--- Configuration
-local config = {
-    TeamCheck = false, 
-    FOV = 150,
-    Smoothing = 1,
-    KeyToToggle = Enum.KeyCode.F,
+-- Загрузка Fluent библиотеки и её дополнений
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- Создание окна Fluent
+local Window = Fluent:CreateWindow({
+    Title = "Aimbot & Hitboxes Suite",
+    SubTitle = "Integrated",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(600, 400),
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Aimbot = Window:AddTab({Title = "Aimbot", Icon = "crosshair"}),
+    Hitboxes = Window:AddTab({Title = "Hitboxes", Icon = "box"}),
+    Settings = Window:AddTab({Title = "Settings", Icon = "settings"})
 }
 
--- Services
+-- Конфигурация
+local config = {
+    FOV = 150,              -- Радиус FOV для аимбота
+    Smoothing = 1,          -- Коэффициент сглаживания (0.01 - 1)
+    AimbotEnabled = false,  -- Статус аимбота (включен/выключен)
+    AimbotToggleKey = Enum.KeyCode.F, -- Клавиша для переключения аимбота
+    HitboxesEnabled = false, -- Статус хитбоксов
+    HitboxMultiplier = 6,    -- Множитель размера головы для хитбоксов
+}
+
+-- Сервисы
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- GUI: FOV ring (создается/удаляется при переключении aimbot)
-local FOVring = nil
-
--- Создаем индикатор статуса aimbot'а (отображается в левом нижнем углу)
+-------------------------------------------------
+-- DRAGGABLE STATUS ИНДИКАТОР (для аимбота)
+-------------------------------------------------
 local statusCircle = Drawing.new("Circle")
 statusCircle.Visible = true
 statusCircle.Thickness = 2
-statusCircle.Radius = 15  -- можно изменить размер по желанию (не слишком маленький, но компактный)
-statusCircle.Color = Color3.fromRGB(255, 0, 0) -- изначально выключен – красный
+statusCircle.Radius = 15
+statusCircle.Color = Color3.fromRGB(255, 0, 0) -- красный – аимбот выключен
 statusCircle.Position = Vector2.new(30, workspace.CurrentCamera.ViewportSize.Y - 30)
 
--- Переменные для перетаскивания индикатора
 local dragging = false
 local dragOffset = Vector2.new(0, 0)
 
--- Обработка нажатия левой кнопки мыши для начала перетаскивания
 UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         local mousePos = UserInputService:GetMouseLocation()
-        -- Проверяем, находится ли курсор внутри кружка (используем расстояние от центра)
         if (mousePos - statusCircle.Position).Magnitude <= statusCircle.Radius then
             dragging = true
             dragOffset = statusCircle.Position - mousePos
@@ -37,7 +58,6 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
--- Обработка движения мыши при перетаскивании
 UserInputService.InputChanged:Connect(function(input)
     if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
         local mousePos = UserInputService:GetMouseLocation()
@@ -45,25 +65,26 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Завершение перетаскивания по отпусканию кнопки мыши
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = false
     end
 end)
 
--- Функция для поиска ближайшего видимого игрока, исключая мёртвых (0 хп или ниже)
+-------------------------------------------------
+-- ФУНКЦИЯ ПОИСКА БЛИЖАЙШЕГО ВИДИМОГО ИГРОКА
+-------------------------------------------------
 local function getClosestVisiblePlayer(camera)
     local ray = Ray.new(camera.CFrame.Position, camera.CFrame.LookVector)
     local closestPlayer = nil
     local closestDistance = math.huge
     
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= game.Players.LocalPlayer then
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
             local character = player.Character
             if character and character:FindFirstChild("Head") then
                 local humanoid = character:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 0 then  -- Проверка здоровья
+                if humanoid and humanoid.Health > 0 then
                     local headPosition = character.Head.Position
                     local targetPosition = ray:ClosestPoint(headPosition)
                     local distance = (targetPosition - headPosition).Magnitude
@@ -76,25 +97,24 @@ local function getClosestVisiblePlayer(camera)
             end
         end
     end
-    
     return closestPlayer
 end
 
-local aimbotEnabled = false
-local aimbotConnection
+-------------------------------------------------
+-- АИМБОТ
+-------------------------------------------------
+local FOVring = nil
+local aimbotConnection = nil
 
--- Обновление aimbot'а (направление камеры на голову ближайшего игрока)
 local function updateAimbot()
-    if aimbotEnabled and FOVring then
+    if config.AimbotEnabled and FOVring then
         local currentCamera = workspace.CurrentCamera
         local crosshairPosition = currentCamera.ViewportSize / 2
         local closestPlayer = getClosestVisiblePlayer(currentCamera)
-        
-        if closestPlayer then
+        if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
             local headPosition = closestPlayer.Character.Head.Position
             local headScreenPosition = currentCamera:WorldToScreenPoint(headPosition)
             local distanceToCrosshair = (Vector2.new(headScreenPosition.X, headScreenPosition.Y) - crosshairPosition).Magnitude
-            
             if distanceToCrosshair < config.FOV then
                 currentCamera.CFrame = currentCamera.CFrame:Lerp(CFrame.new(currentCamera.CFrame.Position, headPosition), config.Smoothing)
             end
@@ -102,56 +122,60 @@ local function updateAimbot()
     end
 end
 
--- Функция переключения aimbot'а и обновления индикатора
+local function EnableAimbot()
+    config.AimbotEnabled = true
+    FOVring = Drawing.new("Circle")
+    FOVring.Visible = true
+    FOVring.Thickness = 1.5
+    FOVring.Radius = config.FOV
+    FOVring.Transparency = 1
+    FOVring.Color = Color3.fromRGB(255, 128, 128)
+    FOVring.Position = workspace.CurrentCamera.ViewportSize / 2
+    aimbotConnection = RunService.RenderStepped:Connect(updateAimbot)
+    statusCircle.Color = Color3.fromRGB(0, 255, 0)  -- зелёный – включён
+end
+
+local function DisableAimbot()
+    config.AimbotEnabled = false
+    if FOVring then
+        FOVring:Remove()
+        FOVring = nil
+    end
+    if aimbotConnection then
+        aimbotConnection:Disconnect()
+        aimbotConnection = nil
+    end
+    statusCircle.Color = Color3.fromRGB(255, 0, 0)  -- красный – выключён
+end
+
 local function toggleAimbot()
-    aimbotEnabled = not aimbotEnabled
-    -- Обновляем цвет индикатора: зелёный при включении, красный при выключении
-    statusCircle.Color = aimbotEnabled and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-    
-    if aimbotEnabled then
-        FOVring = Drawing.new("Circle")
-        FOVring.Visible = true
-        FOVring.Thickness = 1.5
-        FOVring.Radius = config.FOV
-        FOVring.Transparency = 1
-        FOVring.Color = Color3.fromRGB(255, 128, 128)
-        FOVring.Position = workspace.CurrentCamera.ViewportSize / 2
-        aimbotConnection = RunService.RenderStepped:Connect(updateAimbot)
+    if config.AimbotEnabled then
+        DisableAimbot()
     else
-        if FOVring then
-            FOVring:Remove()
-            FOVring = nil
-        end
-        if aimbotConnection then
-            aimbotConnection:Disconnect()
-        end
+        EnableAimbot()
     end
 end
 
--- Переключение aimbot'а по нажатию клавиши F
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == config.KeyToToggle then
+-- Слушатель нажатия клавиши для переключения аимбота
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == config.AimbotToggleKey then
         toggleAimbot()
     end
 end)
 
----------------------------------------------------------
--- Новый функционал: переключение хит-боксов по кнопке P --
----------------------------------------------------------
-
--- Переменная для статуса хит-боксов и хранения оригинальных размеров головы
-local hitboxesEnabled = false
+-------------------------------------------------
+-- ХИТБОКСЫ
+-------------------------------------------------
 local originalHeadSizes = {}
 local lastHitboxTarget = nil
 
--- Функция обновления хит-боксов: увеличивает голову цели в 6 раз
 local function updateHitboxes()
-    if hitboxesEnabled then
+    if config.HitboxesEnabled then
         local currentCamera = workspace.CurrentCamera
         local closestPlayer = getClosestVisiblePlayer(currentCamera)
-        if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
+        -- Дополнительная проверка, чтобы случайно не изменить голову LocalPlayer
+        if closestPlayer and closestPlayer ~= LocalPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
             local head = closestPlayer.Character.Head
-            -- Если таргет сменился, возвращаем размер предыдущей головы
             if lastHitboxTarget and lastHitboxTarget ~= closestPlayer then
                 if lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
                     lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
@@ -162,9 +186,8 @@ local function updateHitboxes()
             if not originalHeadSizes[closestPlayer] then
                 originalHeadSizes[closestPlayer] = head.Size
             end
-            head.Size = originalHeadSizes[closestPlayer] * 6
+            head.Size = originalHeadSizes[closestPlayer] * config.HitboxMultiplier
         else
-            -- Если цели нет, возвращаем размер последней измененной головы
             if lastHitboxTarget and lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
                 lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
                 originalHeadSizes[lastHitboxTarget] = nil
@@ -172,7 +195,6 @@ local function updateHitboxes()
             lastHitboxTarget = nil
         end
     else
-        -- При отключении хит-боксов возвращаем размер измененной головы
         if lastHitboxTarget and lastHitboxTarget.Character and lastHitboxTarget.Character:FindFirstChild("Head") and originalHeadSizes[lastHitboxTarget] then
             lastHitboxTarget.Character.Head.Size = originalHeadSizes[lastHitboxTarget]
             originalHeadSizes[lastHitboxTarget] = nil
@@ -181,13 +203,86 @@ local function updateHitboxes()
     end
 end
 
--- Подключаем обновление хит-боксов к RenderStepped
+
 RunService.RenderStepped:Connect(updateHitboxes)
 
--- Переключение хит-боксов по нажатию клавиши P
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.P then
-        hitboxesEnabled = not hitboxesEnabled
-        print("Hitboxes toggled: " .. tostring(hitboxesEnabled))
+-------------------------------------------------
+-- Fluent GUI: ВКЛАДКА АИМБОТА
+-------------------------------------------------
+Tabs.Aimbot:AddToggle("AimbotToggle", {
+    Title = "Enable Aimbot",
+    Default = false,
+    Callback = function(value)
+        if value then
+            EnableAimbot()
+        else
+            DisableAimbot()
+        end
     end
-end)
+})
+
+Tabs.Aimbot:AddSlider("FOVSlider", {
+    Title = "Aimbot FOV",
+    Default = config.FOV,
+    Min = 50,
+    Max = 300,
+    Rounding = 0,
+    Callback = function(value)
+        config.FOV = value
+        if FOVring then
+            FOVring.Radius = value
+        end
+    end
+})
+
+Tabs.Aimbot:AddSlider("SmoothingSlider", {
+    Title = "Smoothing",
+    Default = config.Smoothing * 100,
+    Min = 1,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(value)
+        config.Smoothing = value / 100
+    end
+})
+
+Tabs.Aimbot:AddDropdown("ToggleKey", {
+    Title = "Toggle Aimbot Key",
+    Values = {"F", "G", "H", "Q", "E", "R"},
+    Default = "F",
+    Callback = function(value)
+        config.AimbotToggleKey = Enum.KeyCode[value]
+    end
+})
+
+-------------------------------------------------
+-- Fluent GUI: ВКЛАДКА ХИТБОКСОВ
+-------------------------------------------------
+Tabs.Hitboxes:AddToggle("HitboxesToggle", {
+    Title = "Enable Hitboxes",
+    Default = false,
+    Callback = function(value)
+        config.HitboxesEnabled = value
+    end
+})
+
+Tabs.Hitboxes:AddSlider("HitboxMultiplier", {
+    Title = "Hitbox Multiplier",
+    Default = config.HitboxMultiplier,
+    Min = 1,
+    Max = 10,
+    Rounding = 1,
+    Callback = function(value)
+        config.HitboxMultiplier = value
+    end
+})
+
+-------------------------------------------------
+-- Настройки сохранения
+-------------------------------------------------
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:SetLibrary(Fluent)
+SaveManager:SetIgnoreIndexes({"FOVring", "statusCircle", "originalHeadSizes", "aimbotConnection"})
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+Window:SelectTab(1)
