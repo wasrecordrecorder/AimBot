@@ -26,7 +26,8 @@ local config = {
     FOV = 150,                    -- Радиус FOV для аимбота и триггер бота
     Smoothing = 1,                -- Коэффициент сглаживания для аимбота (0.01 - 1)
     AimbotEnabled = false,        -- Статус аимбота
-    AimbotToggleKey = Enum.KeyCode.F, -- Клавиша переключения аимбота
+    AimbotToggleKey = Enum.KeyCode.F,
+    AimbotPart = "Head",
     HitboxesEnabled = false,      -- Статус хитбоксов
     HitboxMultiplier = 6,         -- Множитель размера головы для хитбоксов
 
@@ -124,16 +125,30 @@ local function updateAimbot()
         local currentCamera = workspace.CurrentCamera
         local crosshairPosition = currentCamera.ViewportSize / 2
         local closestPlayer = getClosestVisiblePlayer(currentCamera)
-        if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
-            local headPosition = closestPlayer.Character.Head.Position
-            local headScreenPosition = currentCamera:WorldToScreenPoint(headPosition)
-            local distanceToCrosshair = (Vector2.new(headScreenPosition.X, headScreenPosition.Y) - crosshairPosition).Magnitude
-            if distanceToCrosshair < config.FOV then
-                currentCamera.CFrame = currentCamera.CFrame:Lerp(CFrame.new(currentCamera.CFrame.Position, headPosition), config.Smoothing)
+        if closestPlayer and closestPlayer.Character then
+            local character = closestPlayer.Character
+            local targetPart = nil
+
+            if config.AimbotPart == "Legs" then
+                targetPart = character:FindFirstChild("Left Leg") or character:FindFirstChild("Right Leg")
+            else
+                targetPart = character:FindFirstChild(config.AimbotPart)
+            end
+
+            if targetPart then
+                local targetPosition = targetPart.Position
+                local targetScreenPos, onScreen = currentCamera:WorldToScreenPoint(targetPosition)
+                if onScreen then
+                    local distanceToCrosshair = (Vector2.new(targetScreenPos.X, targetScreenPos.Y) - crosshairPosition).Magnitude
+                    if distanceToCrosshair < config.FOV then
+                        currentCamera.CFrame = currentCamera.CFrame:Lerp(CFrame.new(currentCamera.CFrame.Position, targetPosition), config.Smoothing)
+                    end
+                end
             end
         end
     end
 end
+
 
 local function EnableAimbot()
     config.AimbotEnabled = true
@@ -560,6 +575,16 @@ Tabs.Aimbot:AddSlider("SmoothingSlider", {
         config.Smoothing = value / 100
     end
 })
+
+Tabs.Aimbot:AddDropdown("AimbotPart", {
+    Title = "Aim Part",
+    Values = {"Head", "HumanoidRootPart", "UpperTorso", "Legs"},
+    Default = "Head",
+    Callback = function(value)
+        config.AimbotPart = value
+    end
+})
+
 
 Tabs.Aimbot:AddDropdown("ToggleKey", {
     Title = "Toggle Aimbot Key",
