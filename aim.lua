@@ -410,7 +410,7 @@ function ESP:Create(player)
 
             local distance = 0
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                distance = (LocalPlayer.Character.HumanoidRootPart.Position - cf.Position).Magnitude
+                distance = (workspace.CurrentCamera.CFrame.Position - cf.Position).Magnitude
             end
             local label = ""
             if config.ESPShowNames then
