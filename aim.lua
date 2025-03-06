@@ -39,7 +39,9 @@ local config = {
     ESPColor = Color3.new(1, 1, 1), -- Цвет ESP (бокс и текст)
     ESPShowNames = true,          -- Показывать ник
     ESPShowDistance = true,       -- Показывать дистанцию
-    ESPMaxDistance = 500          -- Максимальная дистанция для ESP
+    ESPMaxDistance = 500,
+    ESPShowHealth = false,
+    ESPHeadDot = false          -- Максимальная дистанция для ESP
 }
 
 -- Сервисы
@@ -297,7 +299,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 -------------------------------------------------
--- ESP СИСТЕМА (2D бокс + текст)
+-- ESP СИСТЕМА (2D бокс + текст + health bar + head dot)
 -------------------------------------------------
 local ESP = { Objects = {} }
 
@@ -316,31 +318,84 @@ function ESP:Create(player)
     text.Size = 14
     text.Color = config.ESPColor
 
+    -- Объекты для отображения полоски здоровья
+    local healthBarOutline = Drawing.new("Square")
+    healthBarOutline.Visible = false
+    healthBarOutline.Color = Color3.new(0, 0, 0)
+    healthBarOutline.Thickness = 1
+    healthBarOutline.Filled = false
+
+    local healthBar = Drawing.new("Square")
+    healthBar.Visible = false
+    healthBar.Filled = true
+
+    -- Текст для отображения процента HP
+    local healthText = Drawing.new("Text")
+    healthText.Visible = false
+    healthText.Center = false
+    healthText.Outline = true
+    healthText.Font = 2
+    healthText.Size = 12
+    healthText.Color = config.ESPColor
+
+    -- Объект для head dot
+    local headDot = Drawing.new("Circle")
+    headDot.Visible = false
+    headDot.Radius = 5
+    headDot.Filled = true
+    headDot.Color = config.ESPColor
+
     local connection
     connection = RunService.RenderStepped:Connect(function()
-        if not player.Character or not player.Character:FindFirstChild("Head") or not player.Character:FindFirstChild("HumanoidRootPart") then
+        if not player.Character or not player.Character:FindFirstChild("Humanoid") then
             box.Visible = false
             text.Visible = false
+            healthBarOutline.Visible = false
+            healthBar.Visible = false
+            healthText.Visible = false
+            headDot.Visible = false
             return
         end
         
         local character = player.Character
-        local head = character:FindFirstChild("Head")
-        local root = character:FindFirstChild("HumanoidRootPart")
         local camera = workspace.CurrentCamera
-        local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position)
-        local rootPos, rootOnScreen = camera:WorldToViewportPoint(root.Position)
-        if headOnScreen and rootOnScreen then
-            -- Определяем примерный 2D бокс на основе позиции головы и корня персонажа
-            local height = math.abs(rootPos.Y - headPos.Y) * 2
-            local width = height / 2
-            box.Size = Vector2.new(width, height)
-            box.Position = Vector2.new(headPos.X - width/2, headPos.Y - height*0.25)
+        -- Получаем bounding box персонажа
+        local cf, size = character:GetBoundingBox()
+        local corners = {}
+        for x = -0.5, 0.5, 1 do
+            for y = -0.5, 0.5, 1 do
+                for z = -0.5, 0.5, 1 do
+                    local offset = Vector3.new(x * size.X, y * size.Y, z * size.Z)
+                    local worldPos = (cf + offset).Position
+                    local screenPos, onScreen = camera:WorldToViewportPoint(worldPos)
+                    if onScreen then
+                        table.insert(corners, Vector2.new(screenPos.X, screenPos.Y))
+                    end
+                end
+            end
+        end
+
+        if #corners > 0 then
+            local minX = math.huge
+            local maxX = -math.huge
+            local minY = math.huge
+            local maxY = -math.huge
+            for _, pos in ipairs(corners) do
+                minX = math.min(minX, pos.X)
+                maxX = math.max(maxX, pos.X)
+                minY = math.min(minY, pos.Y)
+                maxY = math.max(maxY, pos.Y)
+            end
+
+            local boxWidth = maxX - minX
+            local boxHeight = maxY - minY
+            box.Position = Vector2.new(minX, minY)
+            box.Size = Vector2.new(boxWidth, boxHeight)
             box.Visible = true
 
             local distance = 0
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                distance = (LocalPlayer.Character.HumanoidRootPart.Position - root.Position).Magnitude
+                distance = (LocalPlayer.Character.HumanoidRootPart.Position - cf.Position).Magnitude
             end
             local label = ""
             if config.ESPShowNames then
@@ -352,19 +407,96 @@ function ESP:Create(player)
             text.Text = label
             text.Position = Vector2.new(box.Position.X + box.Size.X/2, box.Position.Y - 20)
             text.Visible = true
+
+            -- Отображение полоски здоровья
+            if config.ESPShowHealth then
+                local humanoid = character:FindFirstChild("Humanoid")
+                if humanoid then
+                    local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+                    -- Выбираем цвет в зависимости от HP
+                    local healthColor
+                    if healthPercent > 0.7 then
+                        healthColor = Color3.new(0, 1, 0)       -- зелёный
+                    elseif healthPercent > 0.3 then
+                        healthColor = Color3.new(1, 0.65, 0)    -- оранжевый
+                    else
+                        healthColor = Color3.new(1, 0, 0)         -- красный
+                    end
+                    healthBar.Color = healthColor
+
+                    local margin = 2
+                    local barWidth = 5 * 0.7  -- на 30% тоньше, примерно 3.5 пикселей
+                    local barX = box.Position.X - barWidth - margin
+                    local barY = box.Position.Y
+                    healthBarOutline.Position = Vector2.new(barX, barY)
+                    healthBarOutline.Size = Vector2.new(barWidth, box.Size.Y)
+                    healthBarOutline.Visible = true
+
+                    local filledHeight = box.Size.Y * healthPercent
+                    local filledY = barY + (box.Size.Y - filledHeight)
+                    healthBar.Position = Vector2.new(barX, filledY)
+                    healthBar.Size = Vector2.new(barWidth, filledHeight)
+                    healthBar.Visible = true
+
+                    healthText.Text = string.format("HP: %d%%", math.floor(healthPercent * 100))
+                    -- Размещаем текст слева от полоски с небольшим отступом
+                    healthText.Position = Vector2.new(barX - 40, barY + box.Size.Y/2 - 6)
+                    healthText.Visible = true
+                else
+                    healthBar.Visible = false
+                    healthBarOutline.Visible = false
+                    healthText.Visible = false
+                end
+            else
+                healthBar.Visible = false
+                healthBarOutline.Visible = false
+                healthText.Visible = false
+            end
+
+            -- Отрисовка head dot, если включено
+            if config.ESPHeadDot and character:FindFirstChild("Head") then
+                local head = character.Head
+                local headScreenPos, headOnScreen = camera:WorldToViewportPoint(head.Position)
+                if headOnScreen then
+                    headDot.Position = Vector2.new(headScreenPos.X, headScreenPos.Y)
+                    headDot.Radius = 5
+                    headDot.Color = config.ESPColor
+                    headDot.Visible = true
+                else
+                    headDot.Visible = false
+                end
+            else
+                headDot.Visible = false
+            end
         else
             box.Visible = false
             text.Visible = false
+            healthBar.Visible = false
+            healthBarOutline.Visible = false
+            healthText.Visible = false
+            headDot.Visible = false
         end
     end)
     
-    self.Objects[player] = { Box = box, Text = text, Connection = connection }
+    self.Objects[player] = {
+        Box = box,
+        Text = text,
+        HealthBar = healthBar,
+        HealthBarOutline = healthBarOutline,
+        HealthText = healthText,
+        HeadDot = headDot,
+        Connection = connection
+    }
 end
 
 function ESP:Remove(player)
     if self.Objects[player] then
         self.Objects[player].Box:Remove()
         self.Objects[player].Text:Remove()
+        self.Objects[player].HealthBar:Remove()
+        self.Objects[player].HealthBarOutline:Remove()
+        self.Objects[player].HealthText:Remove()
+        self.Objects[player].HeadDot:Remove()
         self.Objects[player].Connection:Disconnect()
         self.Objects[player] = nil
     end
@@ -389,7 +521,6 @@ end
 RunService.RenderStepped:Connect(function()
     ESP:Update()
 end)
-
 -------------------------------------------------
 -- Fluent GUI: ВКЛАДКА АИМБОТА
 -------------------------------------------------
@@ -530,6 +661,21 @@ Tabs.Visuals:AddToggle("ESPDistance", {
         config.ESPShowDistance = value
     end
 })
+Tabs.Visuals:AddToggle("ESPHealthBar", {
+    Title = "Show Health Bar",
+    Default = false,
+    Callback = function(value)
+        config.ESPShowHealth = value
+    end
+})
+Tabs.Visuals:AddToggle("ESPHeadDot", {
+    Title = "Draw Head Dot",
+    Default = false,
+    Callback = function(value)
+        config.ESPHeadDot = value
+    end
+})
+
 
 Tabs.Visuals:AddSlider("ESPMaxDistance", {
     Title = "Max Distance",
