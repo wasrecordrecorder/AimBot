@@ -1,9 +1,8 @@
--- Загрузка Fluent библиотеки и её дополнений
+
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- Создание окна Fluent
 local Window = Fluent:CreateWindow({
     Title = "Aimbot & Hitboxes Suite",
     SubTitle = "Integrated",
@@ -21,44 +20,39 @@ local Tabs = {
     Settings = Window:AddTab({Title = "Settings", Icon = "settings"})
 }
 
--- Конфигурация
 local config = {
-    FOV = 150,                    -- Радиус FOV для аимбота и триггер бота
-    Smoothing = 1,                -- Коэффициент сглаживания для аимбота (0.01 - 1)
-    AimbotEnabled = false,        -- Статус аимбота
+    FOV = 150,                   
+    Smoothing = 1,                
+    AimbotEnabled = false,        
     AimbotToggleKey = Enum.KeyCode.F,
     AimbotPart = "Head",
-    HitboxesEnabled = false,      -- Статус хитбоксов
-    HitboxMultiplier = 6,         -- Множитель размера головы для хитбоксов
+    HitboxesEnabled = false,     
+    HitboxMultiplier = 6,         
+    TriggerBotEnabled = false,    
+    TriggerBotToggleKey = Enum.KeyCode.T, 
+    TriggerBotTeamCheck = true,   
+    TriggerBotDelay = 0.1,         
 
-    TriggerBotEnabled = false,    -- Статус триггер бота
-    TriggerBotToggleKey = Enum.KeyCode.T, -- Клавиша переключения триггер бота
-    TriggerBotTeamCheck = true,   -- Тим чек для триггер бота
-    TriggerBotDelay = 0.1,         -- Задержка между выстрелами (секунд)
-
-    ESPEnabled = false,           -- Статус ESP
-    ESPColor = Color3.new(1, 1, 1), -- Цвет ESP (бокс и текст)
-    ESPShowNames = true,          -- Показывать ник
-    ESPShowDistance = true,       -- Показывать дистанцию
+    ESPEnabled = false,       
+    ESPColor = Color3.new(1, 1, 1), 
+    ESPShowNames = true,          
+    ESPShowDistance = true,       
     ESPMaxDistance = 500,
     ESPShowHealth = false,
-    ESPHeadDot = false          -- Максимальная дистанция для ESP
+    ESPHeadDot = false     
 }
 
--- Сервисы
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--------------------------------------------------
--- DRAGGABLE STATUS ИНДИКАТОР (для аимбота)
--------------------------------------------------
+
 local statusCircle = Drawing.new("Circle")
 statusCircle.Visible = true
 statusCircle.Thickness = 2
 statusCircle.Radius = 15
-statusCircle.Color = Color3.fromRGB(255, 0, 0) -- красный – аимбот выключен
+statusCircle.Color = Color3.fromRGB(255, 0, 0) 
 statusCircle.Position = Vector2.new(30, workspace.CurrentCamera.ViewportSize.Y - 30)
 
 local dragging = false
@@ -87,9 +81,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--------------------------------------------------
--- ФУНКЦИЯ ПОИСКА БЛИЖАЙШЕГО ВИДИМОГО ИГРОКА
--------------------------------------------------
+
 local function getClosestVisiblePlayer(camera)
     local ray = Ray.new(camera.CFrame.Position, camera.CFrame.LookVector)
     local closestPlayer = nil
@@ -114,9 +106,7 @@ local function getClosestVisiblePlayer(camera)
     return closestPlayer
 end
 
--------------------------------------------------
--- АИМБОТ
--------------------------------------------------
+
 local FOVring = nil
 local aimbotConnection = nil
 
@@ -160,7 +150,7 @@ local function EnableAimbot()
     FOVring.Color = Color3.fromRGB(255, 128, 128)
     FOVring.Position = workspace.CurrentCamera.ViewportSize / 2
     aimbotConnection = RunService.RenderStepped:Connect(updateAimbot)
-    statusCircle.Color = Color3.fromRGB(0, 255, 0)  -- зелёный – включён
+    statusCircle.Color = Color3.fromRGB(0, 255, 0)
 end
 
 local function DisableAimbot()
@@ -173,7 +163,7 @@ local function DisableAimbot()
         aimbotConnection:Disconnect()
         aimbotConnection = nil
     end
-    statusCircle.Color = Color3.fromRGB(255, 0, 0)  -- красный – выключён
+    statusCircle.Color = Color3.fromRGB(255, 0, 0) 
 end
 
 local function toggleAimbot()
@@ -190,9 +180,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--------------------------------------------------
--- ХИТБОКСЫ
--------------------------------------------------
 local originalHeadSizes = {}
 local lastHitboxTarget = nil
 
@@ -231,13 +218,9 @@ end
 
 RunService.RenderStepped:Connect(updateHitboxes)
 
--------------------------------------------------
--- TRIGGER BOT
--------------------------------------------------
 local triggerBotConnection = nil
 local lastTriggerShot = 0
 
--- Функция проверки видимости цели (без препятствий)
 local function isTargetVisible(target)
     if not (target and target.Character and target.Character:FindFirstChild("Head")) then
         return false
@@ -266,7 +249,6 @@ local function updateTriggerBot()
         local crosshairPosition = currentCamera.ViewportSize / 2
         local closestPlayer = getClosestVisiblePlayer(currentCamera)
         if closestPlayer and closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head") then
-            -- Если тим чек включен и цель из нашей команды – выходим
             if config.TriggerBotTeamCheck and closestPlayer.Team == LocalPlayer.Team then
                 return
             end
@@ -313,9 +295,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         toggleTriggerBot()
     end
 end)
--------------------------------------------------
--- ESP СИСТЕМА (2D бокс + текст + health bar + head dot)
--------------------------------------------------
+
 local ESP = { Objects = {} }
 
 function ESP:Create(player)
@@ -333,7 +313,6 @@ function ESP:Create(player)
     text.Size = 14
     text.Color = config.ESPColor
 
-    -- Объекты для отображения полоски здоровья
     local healthBarOutline = Drawing.new("Square")
     healthBarOutline.Visible = false
     healthBarOutline.Color = Color3.new(0, 0, 0)
@@ -344,7 +323,6 @@ function ESP:Create(player)
     healthBar.Visible = false
     healthBar.Filled = true
 
-    -- Текст для отображения процента HP
     local healthText = Drawing.new("Text")
     healthText.Visible = false
     healthText.Center = false
@@ -353,7 +331,6 @@ function ESP:Create(player)
     healthText.Size = 12
     healthText.Color = config.ESPColor
 
-    -- Объект для head dot
     local headDot = Drawing.new("Circle")
     headDot.Visible = false
     headDot.Radius = 5
@@ -374,7 +351,6 @@ function ESP:Create(player)
         
         local character = player.Character
         local camera = workspace.CurrentCamera
-        -- Получаем bounding box персонажа
         local cf, size = character:GetBoundingBox()
         local corners = {}
         for x = -0.5, 0.5, 1 do
@@ -423,24 +399,22 @@ function ESP:Create(player)
             text.Position = Vector2.new(box.Position.X + box.Size.X/2, box.Position.Y - 20)
             text.Visible = true
 
-            -- Отображение полоски здоровья
             if config.ESPShowHealth then
                 local humanoid = character:FindFirstChild("Humanoid")
                 if humanoid then
                     local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-                    -- Выбираем цвет в зависимости от HP
                     local healthColor
                     if healthPercent > 0.7 then
-                        healthColor = Color3.new(0, 1, 0)       -- зелёный
+                        healthColor = Color3.new(0, 1, 0)    
                     elseif healthPercent > 0.3 then
-                        healthColor = Color3.new(1, 0.65, 0)    -- оранжевый
+                        healthColor = Color3.new(1, 0.65, 0)   
                     else
-                        healthColor = Color3.new(1, 0, 0)         -- красный
+                        healthColor = Color3.new(1, 0, 0)     
                     end
                     healthBar.Color = healthColor
 
                     local margin = 2
-                    local barWidth = 5 * 0.7  -- на 30% тоньше, примерно 3.5 пикселей
+                    local barWidth = 5 * 0.7 
                     local barX = box.Position.X - barWidth - margin
                     local barY = box.Position.Y
                     healthBarOutline.Position = Vector2.new(barX, barY)
@@ -454,7 +428,6 @@ function ESP:Create(player)
                     healthBar.Visible = true
 
                     healthText.Text = string.format("HP: %d%%", math.floor(healthPercent * 100))
-                    -- Размещаем текст слева от полоски с небольшим отступом
                     healthText.Position = Vector2.new(barX - 40, barY + box.Size.Y/2 - 6)
                     healthText.Visible = true
                 else
@@ -468,7 +441,6 @@ function ESP:Create(player)
                 healthText.Visible = false
             end
 
-            -- Отрисовка head dot, если включено
             if config.ESPHeadDot and character:FindFirstChild("Head") then
                 local head = character.Head
                 local headScreenPos, headOnScreen = camera:WorldToViewportPoint(head.Position)
@@ -536,9 +508,7 @@ end
 RunService.RenderStepped:Connect(function()
     ESP:Update()
 end)
--------------------------------------------------
--- Fluent GUI: ВКЛАДКА АИМБОТА
--------------------------------------------------
+
 Tabs.Aimbot:AddToggle("AimbotToggle", {
     Title = "Enable Aimbot",
     Default = false,
@@ -595,9 +565,6 @@ Tabs.Aimbot:AddDropdown("ToggleKey", {
     end
 })
 
--------------------------------------------------
--- Fluent GUI: ВКЛАДКА ХИТБОКСОВ
--------------------------------------------------
 Tabs.Hitboxes:AddToggle("HitboxesToggle", {
     Title = "Enable Hitboxes",
     Default = false,
@@ -617,9 +584,7 @@ Tabs.Hitboxes:AddSlider("HitboxMultiplier", {
     end
 })
 
--------------------------------------------------
--- Fluent GUI: ВКЛАДКА TRIGGER BOT
--------------------------------------------------
+
 Tabs.TriggerBot:AddToggle("TriggerBotToggle", {
     Title = "Enable Trigger Bot",
     Default = false,
@@ -660,9 +625,6 @@ Tabs.TriggerBot:AddSlider("TriggerBotDelay", {
     end
 })
 
--------------------------------------------------
--- Fluent GUI: ВКЛАДКА VISUALS (ESP)
--------------------------------------------------
 Tabs.Visuals:AddToggle("ESPToggle", {
     Title = "Enable ESP",
     Default = false,
@@ -713,8 +675,7 @@ Tabs.Visuals:AddSlider("ESPMaxDistance", {
     end
 })
 
--------------------------------------------------
--- Настройки сохранения
+
 -------------------------------------------------
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:SetLibrary(Fluent)
